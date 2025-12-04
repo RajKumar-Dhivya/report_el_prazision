@@ -1,122 +1,163 @@
 import 'package:flutter/material.dart';
+import 'API CALL/google_sheets_api.dart';
+import 'workorder_summary.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      debugShowCheckedModeBanner: false,
+      home: WorkOrderReportPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class WorkOrderReportPage extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _WorkOrderReportPageState createState() => _WorkOrderReportPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _WorkOrderReportPageState extends State<WorkOrderReportPage> {
+  Map<String, WorkOrderSummary> summaryMap = {};
+  List<dynamic> receivedPayments = [];
+  bool loading = true;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  @override
+  void initState() {
+    super.initState();
+    loadAllData();
+  }
+
+  Future<void> loadAllData() async {
+    try {
+      final workOrders = await GoogleSheetsApi.getSheet("Work Orders");
+      final payments = await GoogleSheetsApi.getSheet("Received Payments");
+
+      receivedPayments = payments;
+      processWorkOrders(workOrders);
+      calculateReceivedPayments();
+    } catch (e) {
+      print("Error loading data: $e");
+    }
+
+    setState(() => loading = false);
+  }
+
+  void processWorkOrders(List rows) {
+    summaryMap.clear();
+
+    for (var row in rows) {
+      String recordedDate = row["Recorded Date"];
+      String paymentMode = row["Payment Mode"];
+      double sanctionLoad = double.tryParse(row["Sanction Load/KW"].toString()) ?? 0;
+      double totalAmount = double.tryParse(row["Total Amount"].toString()) ?? 0;
+
+      DateTime dt = DateTime.parse(recordedDate);
+      String monthYear = "${_monthName(dt.month)} ${dt.year}";
+
+      summaryMap.putIfAbsent(monthYear, () => WorkOrderSummary(monthYear));
+      var s = summaryMap[monthYear]!;
+
+      s.totalWorkOrders++;
+      s.sanctionLoad += sanctionLoad;
+      s.totalAmount += totalAmount;
+
+      if (paymentMode.toLowerCase() == "loan") {
+        s.loanCount++;
+      } else if (paymentMode.toLowerCase() == "cash") {
+        s.cashCount++;
+      }
+
+      s.workOrderIds.add(row["ID"].toString());
+    }
+  }
+
+  void calculateReceivedPayments() {
+    for (var payment in receivedPayments) {
+      String woID = payment["Work Order ID"].toString();
+      double amount =
+          double.tryParse(payment["Received Payment"].toString()) ?? 0;
+
+      for (var s in summaryMap.values) {
+        if (s.workOrderIds.contains(woID)) {
+          s.amountReceived += amount;
+        }
+      }
+    }
+
+    // Calculate outstanding
+    for (var s in summaryMap.values) {
+      s.outstanding = s.totalAmount - s.amountReceived;
+    }
+  }
+
+  String _monthName(int m) {
+    const months = [
+      "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ];
+    return months[m];
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    double colWidth = MediaQuery.of(context).size.width / 10;
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        title:
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            Image.asset(
+              'assets/company_logo.png',
+               height:200,width: 300,
+               ),
+                SizedBox(width: 500),
+           Text("Monthly Work Order Report",style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),),
+           ], 
+          ),
         ),
+        centerTitle: false,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+      body: loading
+          ? Center(child: CircularProgressIndicator())
+          : summaryMap.isEmpty
+              ? Center(child: Text("No Data Found"))
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: DataTable(
+                      headingRowColor: MaterialStateColor.resolveWith(
+                          (states) => Colors.blue.shade100),
+                      columns: const [
+                        DataColumn(label: Text("Month")),
+                        DataColumn(label: Text("Work Orders")),
+                        DataColumn(label: Text("Load (kW)")),
+                        DataColumn(label: Text("Loan")),
+                        DataColumn(label: Text("Cash")),
+                        DataColumn(label: Text("Amount")),
+                        DataColumn(label: Text("Received")),
+                        DataColumn(label: Text("Outstanding")),
+                      ],
+                      rows: summaryMap.values.map((s) {
+                        return DataRow(cells: [
+                          DataCell(SizedBox(width: colWidth, child: Text(s.monthYear))),
+                          DataCell(SizedBox(width: colWidth, child: Text(s.totalWorkOrders.toString()))),
+                          DataCell(SizedBox(width: colWidth, child: Text(s.sanctionLoad.toString()))),
+                          DataCell(SizedBox(width: colWidth, child: Text(s.loanCount.toString()))),
+                          DataCell(SizedBox(width: colWidth, child: Text(s.cashCount.toString()))),
+                          DataCell(SizedBox(width: colWidth, child: Text("₹${s.totalAmount}"))),
+                          DataCell(SizedBox(width: colWidth, child: Text("₹${s.amountReceived}"))),
+                          DataCell(SizedBox(width: colWidth, child: Text("₹${s.outstanding}")))
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                ),
     );
   }
 }
