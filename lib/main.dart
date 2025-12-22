@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'API CALL/google_sheets_api.dart';
 import 'workorder_summary.dart';
+import 'monthly_detail_page.dart';
 
 void main() {
   runApp(MyApp());
@@ -22,6 +23,8 @@ class WorkOrderReportPage extends StatefulWidget {
 }
 
 class _WorkOrderReportPageState extends State<WorkOrderReportPage> {
+  final ScrollController _horizontalScrollController = ScrollController();
+
   Map<String, WorkOrderSummary> summaryMap = {};
   List<dynamic> receivedPayments = [];
   bool loading = true;
@@ -53,7 +56,8 @@ class _WorkOrderReportPageState extends State<WorkOrderReportPage> {
     for (var row in rows) {
       String recordedDate = row["Recorded Date"];
       String paymentMode = row["Payment Mode"];
-      double sanctionLoad = double.tryParse(row["Sanction Load/KW"].toString()) ?? 0;
+      double sanctionLoad =
+          double.tryParse(row["Sanction Load/KW"].toString()) ?? 0;
       double totalAmount = double.tryParse(row["Total Amount"].toString()) ?? 0;
 
       DateTime dt = DateTime.parse(recordedDate);
@@ -97,67 +101,140 @@ class _WorkOrderReportPageState extends State<WorkOrderReportPage> {
 
   String _monthName(int m) {
     const months = [
-      "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      "",
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
     ];
     return months[m];
   }
 
   @override
   Widget build(BuildContext context) {
-    double colWidth = MediaQuery.of(context).size.width / 10;
     return Scaffold(
       appBar: AppBar(
-        title:
-        SingleChildScrollView(
+        title: Stack(
+          alignment: Alignment.center,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Image.asset(
+                'assets/company_logo.png',
+                height: 200,
+                width: 300,
+              ),
+              // const SizedBox(width: 12),
+            ),
+            const Expanded(
+              child: Text(
+                "Monthly Work Order Report",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : summaryMap.isEmpty
+          ? const Center(child: Text("No Data Found"))
+          : LayoutBuilder(
+    builder: (context, constraints) {
+      double screenWidth = constraints.maxWidth;
+
+      double colWidth = screenWidth < 900 ? 120 : screenWidth / 12;
+
+      // Minimum width required for full table (8 columns)
+      double tableMinWidth = colWidth * 8;
+
+      return Scrollbar(
+        controller: _horizontalScrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: SingleChildScrollView(
+          controller: _horizontalScrollController,
           scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            Image.asset(
-              'assets/company_logo.png',
-               height:200,width: 300,
-               ),
-                SizedBox(width: 500),
-           Text("Monthly Work Order Report",style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),),
-           ], 
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: tableMinWidth < screenWidth
+                  ? screenWidth
+                  : tableMinWidth,
+            ),
+            child: DataTable(
+              showCheckboxColumn: false,
+              headingRowColor: MaterialStateProperty.resolveWith(
+                (states) => Colors.blue.shade100,
+              ),
+              columns: const [
+                DataColumn(label: Text("Month")),
+                DataColumn(label: Text("Work Orders")),
+                DataColumn(label: Text("Load (kW)")),
+                DataColumn(label: Text("Loan")),
+                DataColumn(label: Text("Cash")),
+                DataColumn(label: Text("Amount")),
+                DataColumn(label: Text("Received")),
+                DataColumn(label: Text("Outstanding")),
+              ],
+              rows: summaryMap.values.map((s) {
+                return DataRow(
+                  onSelectChanged: (selected) {
+                    if (selected == true) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MonthlyDetailPage(
+                            monthYear: s.monthYear,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  cells: [
+                    DataCell(SizedBox(
+                        width: colWidth, child: Text(s.monthYear))),
+                    DataCell(SizedBox(
+                        width: colWidth,
+                        child: Text(s.totalWorkOrders.toString()))),
+                    DataCell(SizedBox(
+                        width: colWidth,
+                        child: Text(s.sanctionLoad.toString()))),
+                    DataCell(SizedBox(
+                        width: colWidth,
+                        child: Text(s.loanCount.toString()))),
+                    DataCell(SizedBox(
+                        width: colWidth,
+                        child: Text(s.cashCount.toString()))),
+                    DataCell(SizedBox(
+                        width: colWidth,
+                        child: Text("₹${s.totalAmount}"))),
+                    DataCell(SizedBox(
+                        width: colWidth,
+                        child: Text("₹${s.amountReceived}"))),
+                    DataCell(SizedBox(
+                        width: colWidth,
+                        child: Text("₹${s.outstanding}"))),
+                  ],
+                );
+              }).toList(),
+            ),
           ),
         ),
-        centerTitle: false,
-      ),
-      body: loading
-          ? Center(child: CircularProgressIndicator())
-          : summaryMap.isEmpty
-              ? Center(child: Text("No Data Found"))
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: DataTable(
-                      headingRowColor: MaterialStateColor.resolveWith(
-                          (states) => Colors.blue.shade100),
-                      columns: const [
-                        DataColumn(label: Text("Month")),
-                        DataColumn(label: Text("Work Orders")),
-                        DataColumn(label: Text("Load (kW)")),
-                        DataColumn(label: Text("Loan")),
-                        DataColumn(label: Text("Cash")),
-                        DataColumn(label: Text("Amount")),
-                        DataColumn(label: Text("Received")),
-                        DataColumn(label: Text("Outstanding")),
-                      ],
-                      rows: summaryMap.values.map((s) {
-                        return DataRow(cells: [
-                          DataCell(SizedBox(width: colWidth, child: Text(s.monthYear))),
-                          DataCell(SizedBox(width: colWidth, child: Text(s.totalWorkOrders.toString()))),
-                          DataCell(SizedBox(width: colWidth, child: Text(s.sanctionLoad.toString()))),
-                          DataCell(SizedBox(width: colWidth, child: Text(s.loanCount.toString()))),
-                          DataCell(SizedBox(width: colWidth, child: Text(s.cashCount.toString()))),
-                          DataCell(SizedBox(width: colWidth, child: Text("₹${s.totalAmount}"))),
-                          DataCell(SizedBox(width: colWidth, child: Text("₹${s.amountReceived}"))),
-                          DataCell(SizedBox(width: colWidth, child: Text("₹${s.outstanding}")))
-                        ]);
-                      }).toList(),
-                    ),
-                  ),
-                ),
+      );
+    },
+  ),
+
     );
   }
 }
