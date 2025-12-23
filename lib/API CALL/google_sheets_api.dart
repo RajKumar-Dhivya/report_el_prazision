@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class GoogleSheetsApi {
-  static const String apiUrl = "https://script.google.com/macros/s/AKfycbxo3S9zTGg0otZDvYZkmEzN45yejSbez7Dho0mAq8A72TeeZvu1SCFb__R0QKJjCKBd/exec";
+  static const String apiUrl = "https://script.google.com/macros/s/AKfycbwz1pwdXlH_8oLymDPmB5IUshBRHIorDXKBW5NLVHUdinqVP_MkthA30l_dZilwGytj/exec";
 
   // Fetch all sheets
   static Future<Map<String, dynamic>> getAllSheets() async {
