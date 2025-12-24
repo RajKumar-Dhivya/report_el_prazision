@@ -12,10 +12,13 @@ class SummaryPage extends StatefulWidget {
 
 class _SummaryPageState extends State<SummaryPage> {
   final ScrollController _horizontal = ScrollController();
-  final ScrollController _vertical = ScrollController(); // ✅ NEW
+  final ScrollController _vertical = ScrollController();
 
   Map<String, WorkOrderSummary> summaryMap = {};
   List<dynamic> receivedPayments = [];
+  List<dynamic> workOrders = [];
+  List<dynamic> customers = [];
+
   bool loading = true;
 
   double parseKW(dynamic value) {
@@ -33,10 +36,11 @@ class _SummaryPageState extends State<SummaryPage> {
 
   Future<void> loadAllData() async {
     try {
-      final workOrders = await GoogleSheetsApi.getSheet("Work Orders");
-      final payments = await GoogleSheetsApi.getSheet("Received Payments");
+      workOrders = await GoogleSheetsApi.getSheet("Work Orders");
+      receivedPayments =
+          await GoogleSheetsApi.getSheet("Received Payments");
+      customers = await GoogleSheetsApi.getSheet("Customer");
 
-      receivedPayments = payments;
       processWorkOrders(workOrders);
       calculateReceivedPayments();
     } catch (e) {
@@ -65,7 +69,8 @@ class _SummaryPageState extends State<SummaryPage> {
       DateTime dt = DateTime.parse(recordedDate);
       String monthYear = "${_monthName(dt.month)} ${dt.year}";
 
-      summaryMap.putIfAbsent(monthYear, () => WorkOrderSummary(monthYear));
+      summaryMap.putIfAbsent(
+          monthYear, () => WorkOrderSummary(monthYear));
       var s = summaryMap[monthYear]!;
 
       s.totalWorkOrders++;
@@ -120,7 +125,15 @@ class _SummaryPageState extends State<SummaryPage> {
   }
 
   DataCell cell(dynamic v) =>
-      DataCell(Center(child: Text(v.toString())));
+    DataCell(
+      Center(
+        child: SelectableText(
+          v.toString(),
+          showCursor: true,
+        ),
+      ),
+    );
+
 
   @override
   Widget build(BuildContext context) {
@@ -147,14 +160,13 @@ class _SummaryPageState extends State<SummaryPage> {
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minWidth: screenWidth),
                       child: Scrollbar(
-                        controller: _vertical, // ✅ VERTICAL SCROLLBAR
+                        controller: _vertical,
                         thumbVisibility: true,
                         child: SingleChildScrollView(
                           controller: _vertical,
                           scrollDirection: Axis.vertical,
                           child: DataTable(
-                            border:
-                                TableBorder.all(color: Colors.grey),
+                            border: TableBorder.all(color: Colors.grey),
                             headingRowColor:
                                 MaterialStateProperty.all(
                                     Colors.grey.shade200),
@@ -178,7 +190,13 @@ class _SummaryPageState extends State<SummaryPage> {
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) =>
-                                              MonthlyDetailPage(summary: s),
+                                              MonthlyDetailPage(
+                                            summary: s,
+                                            workOrders: workOrders,
+                                            customers: customers,
+                                            payments:
+                                                receivedPayments,
+                                          ),
                                         ),
                                       );
                                     },

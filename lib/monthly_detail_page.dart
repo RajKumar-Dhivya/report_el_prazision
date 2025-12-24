@@ -1,15 +1,23 @@
-
 import 'package:flutter/material.dart';
-import 'API CALL/google_sheets_api.dart';
 import 'workorder_summary.dart';
 
 class MonthlyDetailPage extends StatefulWidget {
   final WorkOrderSummary summary;
+  final List<dynamic> workOrders;
+  final List<dynamic> customers;
+  final List<dynamic> payments;
 
-  const MonthlyDetailPage({super.key, required this.summary});
+  const MonthlyDetailPage({
+    super.key,
+    required this.summary,
+    required this.workOrders,
+    required this.customers,
+    required this.payments,
+  });
 
   @override
-  State<MonthlyDetailPage> createState() => _MonthlyDetailPageState();
+  State<MonthlyDetailPage> createState() =>
+      _MonthlyDetailPageState();
 }
 
 class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
@@ -17,37 +25,19 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
   final ScrollController _vertical = ScrollController();
 
   bool loading = true;
-
   List<Map<String, dynamic>> rows = [];
-
-  List<dynamic> workOrders = [];
-  List<dynamic> customers = [];
-  List<dynamic> payments = [];
 
   @override
   void initState() {
     super.initState();
-    loadData();
-  }
-
-  Future<void> loadData() async {
-    try {
-      workOrders = await GoogleSheetsApi.getSheet("Work Orders");
-      customers = await GoogleSheetsApi.getSheet("Customer");
-      payments = await GoogleSheetsApi.getSheet("Received Payments");
-
-      processData();
-    } catch (e) {
-      debugPrint("Monthly detail error: $e");
-    }
-
-    setState(() => loading = false);
+    processData();
+    loading = false;
   }
 
   void processData() {
     rows.clear();
 
-    for (var wo in workOrders) {
+    for (var wo in widget.workOrders) {
       if (wo == null) continue;
 
       String recordedDate = wo["Recorded Date"] ?? "";
@@ -55,44 +45,37 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
 
       DateTime dt = DateTime.parse(recordedDate);
       String monthYear = "${_monthName(dt.month)} ${dt.year}";
-
       if (monthYear != widget.summary.monthYear) continue;
 
       String workOrderId = wo["ID"].toString();
       String customerId = wo["Customer Name"].toString();
 
-      // 🔹 CUSTOMER NAME LOOKUP
       String customerName = "";
-      for (var c in customers) {
+      for (var c in widget.customers) {
         if (c["ID"].toString() == customerId) {
           customerName = c["Customer Name"].toString();
           break;
         }
       }
 
-      // 🔹 ADVANCE PAYMENT CALCULATION
       double advance = 0;
-      for (var p in payments) {
+      for (var p in widget.payments) {
         final type = p["Type of payment"]
-        ?.toString()
-        .toLowerCase()
-        .trim();
+            ?.toString()
+            .toLowerCase()
+            .trim();
 
-if (p["Work Order ID"].toString().trim() == workOrderId.trim() &&
-    type != null &&
-    type.contains("advance")) {
-  advance +=
-      double.tryParse(
-        p["Received Payment"]?.toString().trim() ?? "0",
-       
-      ) ??
-      0;
-      debugPrint("type : $type");
-      debugPrint("recived payment : $advance");
-}
-
+        if (p["Work Order ID"].toString().trim() ==
+                workOrderId.trim() &&
+            type != null &&
+            type.contains("advance")) {
+          advance +=
+              double.tryParse(
+                      p["Received Payment"]?.toString() ??
+                          "0") ??
+                  0;
+        }
       }
-
 
       rows.add({
         "customer": customerName,
@@ -123,8 +106,18 @@ if (p["Work Order ID"].toString().trim() == workOrderId.trim() &&
     return months[m];
   }
 
+  // DataCell cell(dynamic v) =>
+  //     DataCell(Center(child: Text(v.toString())));
   DataCell cell(dynamic v) =>
-      DataCell(Center(child: Text(v.toString())));
+    DataCell(
+      Center(
+        child: SelectableText(
+          v.toString(),
+          showCursor: true,
+        ),
+      ),
+    );
+
 
   @override
   Widget build(BuildContext context) {
@@ -159,11 +152,15 @@ if (p["Work Order ID"].toString().trim() == workOrderId.trim() &&
                                 MaterialStateProperty.all(
                                     Colors.grey.shade200),
                             columns: const [
-                              DataColumn(label: Text("Customer Name")),
+                              DataColumn(
+                                  label: Text("Customer Name")),
                               DataColumn(label: Text("K/W")),
-                              DataColumn(label: Text("Loan / Cash")),
-                              DataColumn(label: Text("Total Amount")),
-                              DataColumn(label: Text("Advance")),
+                              DataColumn(
+                                  label: Text("Loan / Cash")),
+                              DataColumn(
+                                  label: Text("Total Amount")),
+                              DataColumn(
+                                  label: Text("Advance")),
                             ],
                             rows: rows.map((r) {
                               return DataRow(cells: [
