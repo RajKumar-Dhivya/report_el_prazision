@@ -158,7 +158,7 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
       children: [
         // 1. THE ACTUAL DATA TABLE
         ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false), // Hide default scrollbar
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true), // Hide default scrollbar
           child: SingleChildScrollView(
             controller: _horizontalController, // Linked Controller
             scrollDirection: Axis.horizontal,
