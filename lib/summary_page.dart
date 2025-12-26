@@ -22,7 +22,7 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   List<dynamic> workOrders = [];
   List<dynamic> customers = [];
   List<dynamic> leads = []; // Corrected variable
-
+  List<dynamic> employees = []; // New variable for employee profiles
   @override
   void initState() {
     super.initState();
@@ -37,6 +37,7 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
       customers = await GoogleSheetsApi.getSheet("Customer");
       // Corrected Sheet Name: "Leads"
       leads = await GoogleSheetsApi.getSheet("Lead"); 
+      employees = await GoogleSheetsApi.getSheet("EmployeeProfile");
       
       processWorkOrders(workOrders);
       calculateReceivedPayments();
@@ -112,7 +113,8 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
                         controller: _tabController,
                         children: [
                           _buildWorkOrderTab(),
-                          LeadAnalysisTab(leads: leads ?? []), 
+                          LeadAnalysisTab(leads: leads ?? [],
+                          employees: employees ?? [],), 
                         ],
                       ),
                 ),
@@ -252,7 +254,31 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
 
   DataRow _buildDataRow(WorkOrderSummary s) {
     return DataRow(cells: [
-      DataCell(Text(s.monthYear, style: const TextStyle(color: Colors.cyanAccent))),
+      DataCell(
+      // 1. MONTH AS BUTTON
+      TextButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MonthlyDetailPage(
+                summary: s,
+                workOrders: workOrders,
+                customers: customers,
+                payments: receivedPayments,
+              ),
+            ),
+          );
+        },
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          backgroundColor: Colors.cyanAccent.withOpacity(0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Text(s.monthYear, 
+          style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+      ),
+    ),
       DataCell(Text(s.totalWorkOrders.toString(), style: const TextStyle(color: Colors.white70))),
       DataCell(Text(s.sanctionLoad.toStringAsFixed(1), style: const TextStyle(color: Colors.white70))),
       DataCell(Text("₹${s.totalAmount}", style: const TextStyle(color: Colors.white70))),
