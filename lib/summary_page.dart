@@ -224,44 +224,63 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   }
 
   Widget _buildDataTable() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF212327), 
-        borderRadius: BorderRadius.circular(12)
-      ),
-      // Adding bottom padding so the scrollbar doesn't overlap the last data row
-      padding: const EdgeInsets.only(bottom: 15), 
-      child: Theme(
-        data: ThemeData(
-          scrollbarTheme: ScrollbarThemeData(
-            thumbColor: WidgetStateProperty.all(Colors.cyanAccent.withOpacity(0.8)),
-            trackColor: WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
-            trackVisibility: WidgetStateProperty.all(true),
-            thickness: WidgetStateProperty.all(8.0),
-            radius: const Radius.circular(10),
+    // Define the desktop threshold inside the method or use MediaQuery
+    final bool isDesktop = MediaQuery.of(context).size.width > 900;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 1000px is the minimum comfortable width for all columns.
+        const double minTableWidth = 1000.0;
+        
+        // adaptiveWidth forces the table to be at least 1000px, 
+        // but if the screen is 1920px (laptop), it becomes 1920px.
+        double adaptiveWidth = constraints.maxWidth > minTableWidth 
+            ? constraints.maxWidth 
+            : minTableWidth;
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFF212327), 
+            borderRadius: BorderRadius.circular(12),
           ),
-        ),
-        child: Scrollbar(
-          controller: _tableHorizontalController,
-          thumbVisibility: true, // Forces it to show on small screens
-          trackVisibility: true,
-          child: SingleChildScrollView(
-            controller: _tableHorizontalController,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: ConstrainedBox(
-              // Using a fixed minimum width ensures the scrollbar has a reason to exist
-              constraints: const BoxConstraints(minWidth: 1000), 
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1C1E)),
-                columns: _buildColumns(),
-                rows: summaryMap.values.map((s) => _buildDataRow(s)).toList(),
+          child: Theme(
+            data: ThemeData(
+              scrollbarTheme: ScrollbarThemeData(
+                thumbColor: WidgetStateProperty.all(Colors.cyanAccent.withOpacity(0.8)),
+                trackColor: WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
+                trackVisibility: WidgetStateProperty.all(true),
+                thickness: WidgetStateProperty.all(8.0),
+                radius: const Radius.circular(10),
+                interactive: true,
+              ),
+            ),
+            child: Scrollbar(
+              controller: _tableHorizontalController,
+              thumbVisibility: true,
+              trackVisibility: true,
+              child: SingleChildScrollView(
+                controller: _tableHorizontalController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 15), 
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: adaptiveWidth), 
+                    child: DataTable(
+                      // This ensures columns spread out to fill the empty space on laptops
+                      columnSpacing: isDesktop ? (constraints.maxWidth / 8) : 40,
+                      headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1C1E)),
+                      columns: _buildColumns(),
+                      rows: summaryMap.values.map((s) => _buildDataRow(s)).toList(),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
