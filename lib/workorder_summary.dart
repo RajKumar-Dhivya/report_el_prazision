@@ -8,7 +8,7 @@ class WorkOrderSummary {
   double totalAmount = 0;
   double amountReceived = 0;
   double outstanding = 0;
-  double margin = 0;
+  double profit = 0;
   List<String> workOrderIds = [];
 
   WorkOrderSummary(this.monthYear);
