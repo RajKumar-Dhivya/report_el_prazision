@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'workorder_summary.dart';
-import 'bottom_horizontal_scrollbar.dart';
+
 
 class MonthlyDetailPage extends StatefulWidget {
   final WorkOrderSummary summary;
@@ -153,46 +153,46 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: Colors.white10),
     ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1. THE ACTUAL DATA TABLE
-        ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: true), // Hide default scrollbar
-          child: SingleChildScrollView(
-            controller: _horizontalController, // Linked Controller
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(), // Better feel on mobile
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: _minTableWidth),
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFF212327)),
-                columns: const [
-                  DataColumn(label: Text("Customer", style: TextStyle(color: Colors.cyanAccent))),
-                  DataColumn(label: Text("K/W", style: TextStyle(color: Colors.cyanAccent))),
-                  DataColumn(label: Text("Mode", style: TextStyle(color: Colors.cyanAccent))),
-                  DataColumn(label: Text("Total", style: TextStyle(color: Colors.cyanAccent))),
-                  DataColumn(label: Text("Advance", style: TextStyle(color: Colors.cyanAccent))),
-                ],
-                rows: rows.map((r) => DataRow(cells: [
-                  selectableCell(r["customer"].toString(), isBold: true),
-                  selectableCell(r["kw"].toString()),
-                  selectableCell(r["mode"].toString()),
-                  selectableCell("₹${r["amount"]}", color: Colors.greenAccent),
-                  selectableCell("₹${r["advance"]}", color: Colors.cyanAccent),
-                ])).toList(),
-              ),
+    // Padding at the bottom gives room for the scrollbar thumb
+    padding: const EdgeInsets.only(bottom: 12), 
+    child: Theme(
+      data: ThemeData(
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: WidgetStateProperty.all(Colors.cyanAccent.withOpacity(0.8)),
+          thickness: WidgetStateProperty.all(8.0),
+          radius: const Radius.circular(10),
+        ),
+      ),
+      child: Scrollbar(
+        controller: _horizontalController,
+        thumbVisibility: true, // Always show when content overflows
+        trackVisibility: true,
+        child: SingleChildScrollView(
+          controller: _horizontalController,
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: _minTableWidth),
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(const Color(0xFF212327)),
+              columns: const [
+                DataColumn(label: Text("Customer", style: TextStyle(color: Colors.cyanAccent))),
+                DataColumn(label: Text("K/W", style: TextStyle(color: Colors.cyanAccent))),
+                DataColumn(label: Text("Mode", style: TextStyle(color: Colors.cyanAccent))),
+                DataColumn(label: Text("Total", style: TextStyle(color: Colors.cyanAccent))),
+                DataColumn(label: Text("Advance", style: TextStyle(color: Colors.cyanAccent))),
+              ],
+              rows: rows.map((r) => DataRow(cells: [
+                selectableCell(r["customer"].toString(), isBold: true),
+                selectableCell(r["kw"].toString()),
+                selectableCell(r["mode"].toString()),
+                selectableCell("₹${r["amount"]}", color: Colors.greenAccent),
+                selectableCell("₹${r["advance"]}", color: Colors.cyanAccent),
+              ])).toList(),
             ),
           ),
         ),
-        
-        // 2. THE INTERACTIVE SCROLLBAR BAR
-        // We place it right under the table inside the same card
-        BottomHorizontalScrollbar(
-          controller: _horizontalController, // Linked Controller
-          width: _minTableWidth,
-        ),
-      ],
+      ),
     ),
   );
 }

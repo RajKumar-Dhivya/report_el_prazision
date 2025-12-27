@@ -226,19 +226,38 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   Widget _buildDataTable() {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(color: const Color(0xFF212327), borderRadius: BorderRadius.circular(12)),
-      child: Scrollbar(
-        controller: _tableHorizontalController,
-        thumbVisibility: true,
-        child: SingleChildScrollView(
+      decoration: BoxDecoration(
+        color: const Color(0xFF212327), 
+        borderRadius: BorderRadius.circular(12)
+      ),
+      // Adding bottom padding so the scrollbar doesn't overlap the last data row
+      padding: const EdgeInsets.only(bottom: 15), 
+      child: Theme(
+        data: ThemeData(
+          scrollbarTheme: ScrollbarThemeData(
+            thumbColor: WidgetStateProperty.all(Colors.cyanAccent.withOpacity(0.8)),
+            trackColor: WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
+            trackVisibility: WidgetStateProperty.all(true),
+            thickness: WidgetStateProperty.all(8.0),
+            radius: const Radius.circular(10),
+          ),
+        ),
+        child: Scrollbar(
           controller: _tableHorizontalController,
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 300),
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1C1E)),
-              columns: _buildColumns(),
-              rows: summaryMap.values.map((s) => _buildDataRow(s)).toList(),
+          thumbVisibility: true, // Forces it to show on small screens
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _tableHorizontalController,
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: ConstrainedBox(
+              // Using a fixed minimum width ensures the scrollbar has a reason to exist
+              constraints: const BoxConstraints(minWidth: 1000), 
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1C1E)),
+                columns: _buildColumns(),
+                rows: summaryMap.values.map((s) => _buildDataRow(s)).toList(),
+              ),
             ),
           ),
         ),

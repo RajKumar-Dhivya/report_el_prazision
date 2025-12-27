@@ -138,37 +138,62 @@ class _LeadAnalysisTabState extends State<LeadAnalysisTab> {
   }
 
   Widget _buildTmeTable(Map<String, Map<String, dynamic>> tmeMetrics) {
-    return Container(
-      height: 480, // Slightly taller to accommodate scrollbar
-      decoration: BoxDecoration(color: const Color(0xFF212327), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
+  return Container(
+    height: 480,
+    decoration: BoxDecoration(
+      color: const Color(0xFF212327), 
+      borderRadius: BorderRadius.circular(12), 
+      border: Border.all(color: Colors.white10),
+    ),
+    child: Theme(
+      data: ThemeData(
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: WidgetStateProperty.all(Colors.cyanAccent.withOpacity(0.8)),
+          trackColor: WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
+          trackVisibility: WidgetStateProperty.all(true),
+          thickness: WidgetStateProperty.all(8.0),
+          radius: const Radius.circular(10),
+        ),
+      ),
       child: Scrollbar(
         controller: _horizontalController2,
         thumbVisibility: true,
+        trackVisibility: true,
         child: SingleChildScrollView(
           controller: _horizontalController2,
           scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-            child: DataTable(
-              columns: const [
-                DataColumn(label: Text("TME", style: TextStyle(color: Colors.cyanAccent))),
-                DataColumn(label: Text("Leads", style: TextStyle(color: Colors.cyanAccent))),
-                DataColumn(label: Text("Closed", style: TextStyle(color: Colors.cyanAccent))),
-                DataColumn(label: Text("Pending", style: TextStyle(color: Colors.cyanAccent))),
-                DataColumn(label: Text("Not Converted", style: TextStyle(color: Colors.cyanAccent))),
-              ],
-              rows: tmeMetrics.entries.map((e) => DataRow(cells: [
-                DataCell(Text(_getEmployeeName(e.key), style: const TextStyle(color: Colors.white, fontSize: 12))),
-                DataCell(Text(e.value["total"].toString(), style: const TextStyle(color: Colors.white))),
-                DataCell(Text(e.value["closed"].toString(), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
-                DataCell(Text(e.value["pending"].toString(), style: const TextStyle(color: Colors.orangeAccent))),
-                DataCell(Text(e.value["notConv"].toString(), style: const TextStyle(color: Colors.redAccent))),
-              ])).toList(),
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 15), // Space for the scrollbar
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 800), // Ensures scrollability
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1C1E)),
+                  columns: const [
+                    DataColumn(label: Text("TME", style: TextStyle(color: Colors.cyanAccent))),
+                    DataColumn(label: Text("Leads", style: TextStyle(color: Colors.cyanAccent))),
+                    DataColumn(label: Text("Closed", style: TextStyle(color: Colors.cyanAccent))),
+                    DataColumn(label: Text("Pending", style: TextStyle(color: Colors.cyanAccent))),
+                    DataColumn(label: Text("Not Converted", style: TextStyle(color: Colors.cyanAccent))),
+                  ],
+                  rows: tmeMetrics.entries.map((e) => DataRow(cells: [
+                    DataCell(Text(_getEmployeeName(e.key), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                    DataCell(Text(e.value["total"].toString(), style: const TextStyle(color: Colors.white))),
+                    DataCell(Text(e.value["closed"].toString(), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))),
+                    DataCell(Text(e.value["pending"].toString(), style: const TextStyle(color: Colors.orangeAccent))),
+                    DataCell(Text(e.value["notConv"].toString(), style: const TextStyle(color: Colors.redAccent))),
+                  ])).toList(),
+                ),
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildChartCard(Map<String, Map<String, dynamic>> tmeMetrics) {
     // 1. Prepare Performance Data for EVERYONE
