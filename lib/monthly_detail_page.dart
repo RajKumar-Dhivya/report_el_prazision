@@ -296,12 +296,12 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
       ),
       child: Row(
         children: [
-          _cell("CUSTOMER NAME", flex: 3, isHeader: true),
+          _cell("CUSTOMER NAME", flex: 3, isHeader: true,),
           _cell("KW", flex: 2, isHeader: true),
           _cell("PAYMENT MODE", flex: 2, isHeader: true),
           _cell("TOTAL VALUE", flex: 2, isHeader: true),
           _cell("RECEIVED", flex: 2, isHeader: true),
-          _cell("OUTSTANDING.", flex: 2, isHeader: true),
+          _cell("OUTSTANDING", flex: 2, isHeader: true),
           _cell("EXPENSE", flex: 2, isHeader: true),
           _cell("PROFIT", flex: 2, isHeader: true),
         ],
@@ -337,7 +337,7 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
         style: TextStyle(
           fontSize: isHeader ? 11 : 13,
           fontWeight: (isHeader || isBold) ? FontWeight.bold : FontWeight.normal,
-          color: isHeader ? Colors.grey : (color ?? Colors.white70),
+          color: isHeader ? Colors.cyanAccent : (color ?? Colors.white70),
         ),
       ),
     );

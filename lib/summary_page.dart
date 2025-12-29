@@ -14,7 +14,8 @@ class SummaryPage extends StatefulWidget {
 class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final ScrollController _tableHorizontalController = ScrollController();
-  final ScrollController _mainVerticalController = ScrollController();
+  final ScrollController _tableVerticalController = ScrollController();
+  final ScrollController _mainScrollController = ScrollController();
 
   bool loading = true;
   Map<String, WorkOrderSummary> summaryMap = {};
@@ -23,7 +24,6 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   List<dynamic> customers = [];
   List<dynamic> leads = [];
   List<dynamic> employees = [];
-  
   List<dynamic> expenses = [];
   List<dynamic> usedProducts = [];
   List<dynamic> materialLog = [];
@@ -58,7 +58,6 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
     summaryMap.clear();
     for (var row in rows) {
       if (row == null || row.values.every((v) => v == null || v.toString().trim().isEmpty)) continue;
-      
       String recordedDate = row["Recorded Date"] ?? "";
       String woID = row["ID"].toString().trim();
       if (recordedDate.isEmpty) continue;
@@ -72,15 +71,11 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
 
       double totalProductCost = 0;
       var woUsedProducts = usedProducts.where((up) => up["Work Order id"].toString().trim() == woID);
-      
       for (var product in woUsedProducts) {
         double qty = double.tryParse(product["used quantity"].toString()) ?? 0;
-        String productID = product["product id"].toString().trim();
-        
         double unitPrice = materialLog
-            .where((ml) => ml["ID"].toString().trim() == productID)
+            .where((ml) => ml["ID"].toString().trim() == product["product id"].toString().trim())
             .fold(0.0, (sum, item) => sum + (double.tryParse(item["Unit Price with GST"].toString()) ?? 0.0));
-        
         totalProductCost += (qty * unitPrice);
       }
 
@@ -118,70 +113,25 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width > 900;
-
-    // We wrap the entire Scaffold in SelectionArea to make EVERYTHING selectable
     return SelectionArea(
       child: Scaffold(
         backgroundColor: const Color(0xFF1A1C1E),
-        appBar: !isDesktop ? AppBar(
-          title: const SelectableText("Reports Dashboard"),
-          backgroundColor: const Color(0xFF212327),
-          elevation: 0,
-        ) : null,
-        drawer: !isDesktop ? _buildSidebar() : null,
-        body: Row(
+        body: Column(
           children: [
-            if (isDesktop) _buildSidebar(),
+            _buildHeader(),
             Expanded(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: loading
-                        ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
-                        : TabBarView(
-                            controller: _tabController,
-                            children: [
-                              _buildWorkOrderTab(),
-                              LeadAnalysisTab(
-                                leads: leads ?? [],
-                                employees: employees ?? [],
-                              ),
-                            ],
-                          ),
-                  ),
-                ],
-              ),
+              child: loading
+                  ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildWorkOrderContent(),
+                        LeadAnalysisTab(leads: leads, employees: employees),
+                      ],
+                    ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSidebar() {
-    return Container(
-      width: 250,
-      color: const Color(0xFF111315),
-      child: Column(
-        children: [
-          const DrawerHeader(child: Center(child: Icon(Icons.analytics, size: 80, color: Colors.cyanAccent))),
-          _sidebarItem(Icons.dashboard, "Dashboard", true),
-          _sidebarItem(Icons.assignment, "Work Orders", false),
-          _sidebarItem(Icons.leaderboard, "Leads", false),
-          _sidebarItem(Icons.settings, "Settings", false),
-        ],
-      ),
-    );
-  }
-
-  Widget _sidebarItem(IconData icon, String title, bool selected) {
-    return ListTile(
-      leading: Icon(icon, color: selected ? Colors.cyanAccent : Colors.grey),
-      title: SelectableText(title, 
-        style: TextStyle(color: selected ? Colors.white : Colors.grey),
-        onTap: () { /* Handle navigation if needed */ },
       ),
     );
   }
@@ -214,17 +164,24 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildWorkOrderTab() {
-    return SingleChildScrollView(
-      controller: _mainVerticalController,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          _buildSummaryCards(),
-          const SizedBox(height: 20),
-          _buildDataTable(),
-        ],
-      ),
+  Widget _buildWorkOrderContent() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          controller: _mainScrollController,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildSummaryCards(),
+              const SizedBox(height: 24),
+              // THE TABLE CONTAINER
+              _buildStickyTable(constraints.maxHeight),
+              const SizedBox(height: 40), // Bottom padding to prevent scroll cutoff
+            ],
+          ),
+        );
+      }
     );
   }
 
@@ -234,32 +191,36 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
     double totalOutstanding = summaryMap.values.fold(0.0, (sum, item) => sum + item.outstanding);
     double totalProfit = summaryMap.values.fold(0.0, (sum, item) => sum + item.profit);
 
-    return Wrap(
-      spacing: 20,
-      runSpacing: 20,
-      children: [
-        _statCard("Total WorkOrders", totalWO.toString(), Colors.blue),
-        _statCard("Total Received Amount", "₹${totalReceived.toStringAsFixed(2)}", Colors.green),
-        _statCard("Total Outstanding", "₹${totalOutstanding.toStringAsFixed(2)}", Colors.redAccent),
-        _statCard("Total Profit", "₹${totalProfit.toStringAsFixed(2)}", Colors.cyanAccent),
-      ],
+    return Center( 
+      child: Wrap(
+        spacing: 20,
+        runSpacing: 20,
+        alignment: WrapAlignment.center, 
+        children: [
+          _statCard("Total WorkOrders", totalWO.toString(), Colors.blue),
+          _statCard("Total Received Amount", "₹${totalReceived.toStringAsFixed(2)}", Colors.green),
+          _statCard("Total Outstanding", "₹${totalOutstanding.toStringAsFixed(2)}", Colors.redAccent),
+          _statCard("Total Profit", "₹${totalProfit.toStringAsFixed(2)}", Colors.cyanAccent),
+        ],
+      ),
     );
   }
 
   Widget _statCard(String title, String value, Color color) {
     return Container(
       padding: const EdgeInsets.all(20),
-      width: 250,
+      width: 250, 
       decoration: BoxDecoration(
           color: const Color(0xFF212327),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withOpacity(0.3))),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center, 
         children: [
-          SelectableText(title, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-          const SizedBox(height: 10),
-          SelectableText(value,
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 8),
+          Text(value,
+              textAlign: TextAlign.center,
               style: TextStyle(color: color == Colors.cyanAccent ? Colors.cyanAccent : Colors.white, 
               fontSize: 20, fontWeight: FontWeight.bold)),
         ],
@@ -267,111 +228,128 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildDataTable() {
-    final bool isDesktop = MediaQuery.of(context).size.width > 900;
+  Widget _buildStickyTable(double maxHeight) {
+    final List<String> headers = ["Month", "Total WO", "Load (kW)", "Amount", "Received", "Outstanding", "Profit"];
+    
+    // Limits the container height so it doesn't overflow the screen
+    double dynamicMaxHeight = maxHeight * 0.7;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const double minTableWidth = 1100.0;
-        double adaptiveWidth = constraints.maxWidth > minTableWidth ? constraints.maxWidth : minTableWidth;
-
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xFF212327),
-            borderRadius: BorderRadius.circular(12),
+    return Container(
+      constraints: BoxConstraints(
+        minHeight: 150,
+        maxHeight: dynamicMaxHeight,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF212327),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Theme(
+          data: ThemeData.dark().copyWith(
+            scrollbarTheme: ScrollbarThemeData(
+              thumbColor: WidgetStateProperty.all(Colors.cyanAccent.withOpacity(0.5)),
+              thickness: WidgetStateProperty.all(6),
+            )
           ),
-          child: Theme(
-            data: ThemeData(
-              scrollbarTheme: ScrollbarThemeData(
-                thumbColor: WidgetStateProperty.all(Colors.cyanAccent.withOpacity(0.8)),
-                trackColor: WidgetStateProperty.all(Colors.white.withOpacity(0.05)),
-                trackVisibility: WidgetStateProperty.all(true),
-                thickness: WidgetStateProperty.all(8.0),
-                radius: const Radius.circular(10),
-                interactive: true,
-              ),
-            ),
-            child: Scrollbar(
+          child: Scrollbar(
+            controller: _tableHorizontalController,
+            thumbVisibility: true,
+            // Horizontal scrollbar is now inside the container clipping area
+            child: SingleChildScrollView(
               controller: _tableHorizontalController,
-              thumbVisibility: true,
-              trackVisibility: true,
-              child: SingleChildScrollView(
-                controller: _tableHorizontalController,
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 15),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: adaptiveWidth),
-                    child: DataTable(
-                      columnSpacing: isDesktop ? (constraints.maxWidth / 9) : 35,
-                      headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1C1E)),
-                      columns: _buildColumns(),
-                      rows: summaryMap.values.map((s) => _buildDataRow(s)).toList(),
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: 1100, // Fixed internal width for horizontal scrolling
+                child: Column(
+                  mainAxisSize: MainAxisSize.min, // Fits rows if few
+                  children: [
+                    // --- STICKY HEADER ---
+                    Container(
+                      color: const Color(0xFF1A1C1E),
+                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                      child: Row(
+                        children: headers.map((h) => Expanded(
+                          child: Text(h, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))
+                        )).toList(),
+                      ),
                     ),
-                  ),
+                    // --- SCROLLABLE BODY ---
+                    Flexible(
+                      child: Scrollbar(
+                        controller: _tableVerticalController,
+                        thumbVisibility: true,
+                        child: ListView.builder(
+                          controller: _tableVerticalController,
+                          itemCount: summaryMap.length,
+                          shrinkWrap: true, // Allows container to hug the rows
+                          padding: EdgeInsets.zero,
+                          itemBuilder: (context, index) {
+                            var s = summaryMap.values.elementAt(index);
+                            return _buildCustomRow(s);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  List<DataColumn> _buildColumns() {
-    return ["Month", "Total WO", "Load (kW)", "Amount", "Received", "Outstanding", "Profit"]
-        .map((col) => DataColumn(
-            label: SelectableText(col, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))))
-        .toList();
-  }
-
-  DataRow _buildDataRow(WorkOrderSummary s) {
-    return DataRow(cells: [
-      DataCell(
-        // The TextButton content is wrapped in SelectionArea by the parent scaffold
-        TextButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MonthlyDetailPage(
-                  summary: s,
-                  workOrders: workOrders,
-                  customers: customers,
-                  payments: receivedPayments,
-                  expenses: expenses,           // Add this
-      usedProducts: usedProducts,   // Add this
-      materialLog: materialLog,     // Add this
-                ),
-              ),
-            );
-          },
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            backgroundColor: Colors.cyanAccent.withOpacity(0.1),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          child: SelectableText(s.monthYear, 
-            style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
-            onTap: () {
-               // When using SelectableText inside a button, clicking the text might 
-               // not trigger the button's onPressed. We handle navigation here too.
-               Navigator.push(context, MaterialPageRoute(builder: (context) => MonthlyDetailPage(
-                  summary: s, workOrders: workOrders, customers: customers, payments: receivedPayments, expenses: expenses, usedProducts: usedProducts, materialLog: materialLog,
-                )));
-            },
           ),
         ),
       ),
-      DataCell(SelectableText(s.totalWorkOrders.toString(), style: const TextStyle(color: Colors.white70))),
-      DataCell(SelectableText(s.sanctionLoad.toStringAsFixed(1), style: const TextStyle(color: Colors.white70))),
-      DataCell(SelectableText("₹${s.totalAmount.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white70))),
-      DataCell(SelectableText("₹${s.amountReceived.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white70))),
-      DataCell(SelectableText("₹${s.outstanding.toStringAsFixed(2)}", style: const TextStyle(color: Colors.redAccent))),
-      DataCell(SelectableText("₹${s.profit.toStringAsFixed(2)}", 
-          style: TextStyle(color: s.profit >= 0 ? Colors.greenAccent : Colors.orangeAccent, fontWeight: FontWeight.bold))),
-    ]);
+    );
+  }
+
+  Widget _buildCustomRow(WorkOrderSummary s) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => _navigateToDetail(s),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.cyanAccent.withOpacity(0.08),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(s.monthYear, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+          Expanded(child: SelectableText(s.totalWorkOrders.toString(), style: const TextStyle(color: Colors.white))),
+          Expanded(child: SelectableText(s.sanctionLoad.toStringAsFixed(1), style: const TextStyle(color: Colors.white))),
+          Expanded(child: SelectableText("₹${s.totalAmount.toStringAsFixed(0)}", style: const TextStyle(color: Colors.white))),
+          Expanded(child: SelectableText("₹${s.amountReceived.toStringAsFixed(0)}", style: const TextStyle(color: Colors.greenAccent))),
+          Expanded(child: SelectableText("₹${s.outstanding.toStringAsFixed(0)}", style: const TextStyle(color: Colors.redAccent))),
+          Expanded(child: SelectableText("₹${s.profit.toStringAsFixed(0)}", 
+            style: TextStyle(color: s.profit >= 0 ? Colors.cyanAccent : Colors.orangeAccent, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToDetail(WorkOrderSummary s) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MonthlyDetailPage(
+          summary: s,
+          workOrders: workOrders,
+          customers: customers,
+          payments: receivedPayments,
+          expenses: expenses,
+          usedProducts: usedProducts,
+          materialLog: materialLog,
+        ),
+      ),
+    );
   }
 }
