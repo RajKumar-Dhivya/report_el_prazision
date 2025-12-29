@@ -184,75 +184,71 @@ class _SummaryPageState extends State<SummaryPage>
   }
 
   Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-      color: const Color(0xFF1A1C1E),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // 1. Company Logo
-              Image.asset(
-                'asset/company_logo.png',
-                height: 40,
-                errorBuilder: (ctx, err, stack) => const Icon(
-                  Icons.business,
-                  color: Colors.cyanAccent,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(width: 15),
-              const SelectableText(
-                "Reports & Analytics",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            indicatorWeight: 3,
-            indicatorSize: TabBarIndicatorSize.label,
-            indicatorColor: Colors.cyanAccent,
-            labelColor: Colors.cyanAccent,
-            unselectedLabelColor: Colors.grey.shade500,
-            tabAlignment: TabAlignment.start,
-            dividerColor: Colors.transparent,
-            tabs: const [
-              Tab(
-                child: Text(
-                  "WORK ORDER SUMMARY",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+    color: const Color(0xFF1A1C1E),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Check if we are on a small screen (e.g., width less than 600)
+            bool isMobile = constraints.maxWidth < 600;
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // 1. Flexible Title
+                Expanded(
+                  child: SelectableText(
+                    "Reports & Analytics",
+                    style: TextStyle(
+                      color: Colors.white,
+                      // Smaller font for mobile, larger for desktop
+                      fontSize: isMobile ? 18 : 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-              ),
-              Tab(
-                child: Text(
-                  "LEAD ANALYSIS",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
+                
+                const SizedBox(width: 10), // Small gap
+
+                // 2. Company Logo
+                Image.asset(
+                  'assets/elp-logo (Small).jpeg',
+                  height: isMobile ? 30 : 40, // Slightly smaller logo on mobile
+                  errorBuilder: (ctx, err, stack) => Icon(
+                    Icons.business,
+                    color: Colors.cyanAccent,
+                    size: isMobile ? 30 : 40,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+        TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.label,
+          indicatorColor: Colors.cyanAccent,
+          labelColor: Colors.cyanAccent,
+          unselectedLabelColor: Colors.grey.shade500,
+          tabAlignment: TabAlignment.start,
+          dividerColor: Colors.transparent,
+          tabs: const [
+            Tab(child: Text("WORK ORDER SUMMARY", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+            Tab(child: Text("LEAD ANALYSIS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildWorkOrderContent() {
     return LayoutBuilder(

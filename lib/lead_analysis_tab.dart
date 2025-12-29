@@ -182,7 +182,7 @@ class _LeadAnalysisTabState extends State<LeadAnalysisTab> {
             ),
             child: Row(
               children: const [
-                Expanded(flex: 3, child: Text("TME Name", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 2, child: Text("Name", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))),
                 Expanded(child: Text("Total", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))),
                 Expanded(child: Text("Closed", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))),
                 Expanded(child: Text("Pending", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))),
@@ -213,7 +213,7 @@ class _LeadAnalysisTabState extends State<LeadAnalysisTab> {
                       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
                       child: Row(
                         children: [
-                          Expanded(flex: 3, child: Text(_getEmployeeName(entry.key), style: const TextStyle(color: Colors.white, fontSize: 12))),
+                          Expanded(flex: 2, child: Text(_getEmployeeName(entry.key), style: const TextStyle(color: Colors.white, fontSize: 12))),
                           Expanded(child: Text(entry.value["total"].toString(), style: const TextStyle(color: Colors.white, fontSize: 12))),
                           Expanded(child: Text(entry.value["closed"].toString(), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12))),
                           Expanded(child: Text(entry.value["pending"].toString(), style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
