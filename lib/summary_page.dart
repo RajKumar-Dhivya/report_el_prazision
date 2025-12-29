@@ -241,8 +241,8 @@ class _SummaryPageState extends State<SummaryPage>
           tabAlignment: TabAlignment.start,
           dividerColor: Colors.transparent,
           tabs: const [
-            Tab(child: Text("WORK ORDER SUMMARY", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-            Tab(child: Text("LEAD ANALYSIS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+            Tab(child: Text("WORK ORDER SUMMARY", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))),
+            Tab(child: Text("LEAD ANALYSIS", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))),
           ],
         ),
       ],
