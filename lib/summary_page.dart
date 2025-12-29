@@ -24,7 +24,6 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   List<dynamic> leads = [];
   List<dynamic> employees = [];
   
-  // New Lists for Profit Calculation
   List<dynamic> expenses = [];
   List<dynamic> usedProducts = [];
   List<dynamic> materialLog = [];
@@ -38,14 +37,11 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
 
   Future<void> loadAllData() async {
     try {
-      // Fetching all required sheets
       workOrders = await GoogleSheetsApi.getSheet("Work Orders");
       receivedPayments = await GoogleSheetsApi.getSheet("Received Payments");
       customers = await GoogleSheetsApi.getSheet("Customer");
       leads = await GoogleSheetsApi.getSheet("Lead");
       employees = await GoogleSheetsApi.getSheet("EmployeeProfile");
-      
-      // Fetching New sheets for profit calculation
       expenses = await GoogleSheetsApi.getSheet("Expense");
       usedProducts = await GoogleSheetsApi.getSheet("Used Products");
       materialLog = await GoogleSheetsApi.getSheet("Material Consumption & Purchase Log");
@@ -70,14 +66,10 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
       double sanctionLoad = double.tryParse(row["Sanction Load/KW"].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
       double totalAmount = double.tryParse(row["Total Amount"].toString()) ?? 0;
 
-      // --- PROFIT CALCULATION LOGIC ---
-      
-      // 1. Sum Expenses for this Work Order
       double totalExpenses = expenses
           .where((exp) => exp["Work order ID"].toString().trim() == woID)
           .fold(0.0, (sum, item) => sum + (double.tryParse(item["Amount"].toString()) ?? 0.0));
 
-      // 2. Sum Used Products Cost
       double totalProductCost = 0;
       var woUsedProducts = usedProducts.where((up) => up["Work Order id"].toString().trim() == woID);
       
@@ -85,7 +77,6 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
         double qty = double.tryParse(product["used quantity"].toString()) ?? 0;
         String productID = product["product id"].toString().trim();
         
-        // Find unit price from Material Log
         double unitPrice = materialLog
             .where((ml) => ml["ID"].toString().trim() == productID)
             .fold(0.0, (sum, item) => sum + (double.tryParse(item["Unit Price with GST"].toString()) ?? 0.0));
@@ -94,8 +85,6 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
       }
 
       double woProfit = totalAmount - (totalExpenses + totalProductCost);
-
-      // --- ORGANIZE BY MONTH ---
       DateTime dt = DateTime.parse(recordedDate);
       String monthYear = "${_monthName(dt.month)} ${dt.year}";
 
@@ -104,7 +93,7 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
       s.totalWorkOrders++;
       s.sanctionLoad += sanctionLoad;
       s.totalAmount += totalAmount;
-      s.profit += woProfit; // Make sure to add 'double profit' to your WorkOrderSummary class
+      s.profit += woProfit;
       s.workOrderIds.add(woID);
     }
   }
@@ -131,39 +120,42 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width > 900;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1C1E),
-      appBar: !isDesktop ? AppBar(
-        title: const Text("Reports Dashboard"),
-        backgroundColor: const Color(0xFF212327),
-        elevation: 0,
-      ) : null,
-      drawer: !isDesktop ? _buildSidebar() : null,
-      body: Row(
-        children: [
-          if (isDesktop) _buildSidebar(),
-          Expanded(
-            child: Column(
-              children: [
-                _buildHeader(),
-                Expanded(
-                  child: loading
-                      ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
-                      : TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _buildWorkOrderTab(),
-                            LeadAnalysisTab(
-                              leads: leads ?? [],
-                              employees: employees ?? [],
-                            ),
-                          ],
-                        ),
-                ),
-              ],
+    // We wrap the entire Scaffold in SelectionArea to make EVERYTHING selectable
+    return SelectionArea(
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1A1C1E),
+        appBar: !isDesktop ? AppBar(
+          title: const SelectableText("Reports Dashboard"),
+          backgroundColor: const Color(0xFF212327),
+          elevation: 0,
+        ) : null,
+        drawer: !isDesktop ? _buildSidebar() : null,
+        body: Row(
+          children: [
+            if (isDesktop) _buildSidebar(),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  Expanded(
+                    child: loading
+                        ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
+                        : TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _buildWorkOrderTab(),
+                              LeadAnalysisTab(
+                                leads: leads ?? [],
+                                employees: employees ?? [],
+                              ),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -187,7 +179,10 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   Widget _sidebarItem(IconData icon, String title, bool selected) {
     return ListTile(
       leading: Icon(icon, color: selected ? Colors.cyanAccent : Colors.grey),
-      title: Text(title, style: TextStyle(color: selected ? Colors.white : Colors.grey)),
+      title: SelectableText(title, 
+        style: TextStyle(color: selected ? Colors.white : Colors.grey),
+        onTap: () { /* Handle navigation if needed */ },
+      ),
     );
   }
 
@@ -210,8 +205,8 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
             unselectedLabelColor: Colors.grey,
             tabAlignment: TabAlignment.start,
             tabs: const [
-              Tab(text: "Work Order Summary"),
-              Tab(text: "Lead Analysis"),
+              Tab(child: Text("Work Order Summary", style: TextStyle(fontSize: 13))),
+              Tab(child: Text("Lead Analysis", style: TextStyle(fontSize: 13))),
             ],
           ),
         ],
@@ -246,7 +241,7 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
         _statCard("Total WorkOrders", totalWO.toString(), Colors.blue),
         _statCard("Total Received Amount", "₹${totalReceived.toStringAsFixed(2)}", Colors.green),
         _statCard("Total Outstanding", "₹${totalOutstanding.toStringAsFixed(2)}", Colors.redAccent),
-        _statCard("Total Profit", "₹${totalProfit.toStringAsFixed(2)}", Colors.cyanAccent), // New Profit Card
+        _statCard("Total Profit", "₹${totalProfit.toStringAsFixed(2)}", Colors.cyanAccent),
       ],
     );
   }
@@ -254,7 +249,7 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   Widget _statCard(String title, String value, Color color) {
     return Container(
       padding: const EdgeInsets.all(20),
-      width: 250, // Slightly reduced to fit 4 cards better
+      width: 250,
       decoration: BoxDecoration(
           color: const Color(0xFF212327),
           borderRadius: BorderRadius.circular(12),
@@ -277,7 +272,7 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double minTableWidth = 1100.0; // Increased to accommodate Profit column
+        const double minTableWidth = 1100.0;
         double adaptiveWidth = constraints.maxWidth > minTableWidth ? constraints.maxWidth : minTableWidth;
 
         return Container(
@@ -328,13 +323,14 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
   List<DataColumn> _buildColumns() {
     return ["Month", "Total WO", "Load (kW)", "Amount", "Received", "Outstanding", "Profit"]
         .map((col) => DataColumn(
-            label: Text(col, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))))
+            label: SelectableText(col, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold))))
         .toList();
   }
 
   DataRow _buildDataRow(WorkOrderSummary s) {
     return DataRow(cells: [
       DataCell(
+        // The TextButton content is wrapped in SelectionArea by the parent scaffold
         TextButton(
           onPressed: () {
             Navigator.push(
@@ -345,6 +341,9 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
                   workOrders: workOrders,
                   customers: customers,
                   payments: receivedPayments,
+                  expenses: expenses,           // Add this
+      usedProducts: usedProducts,   // Add this
+      materialLog: materialLog,     // Add this
                 ),
               ),
             );
@@ -354,15 +353,24 @@ class _SummaryPageState extends State<SummaryPage> with SingleTickerProviderStat
             backgroundColor: Colors.cyanAccent.withOpacity(0.1),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          child: Text(s.monthYear, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+          child: SelectableText(s.monthYear, 
+            style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+            onTap: () {
+               // When using SelectableText inside a button, clicking the text might 
+               // not trigger the button's onPressed. We handle navigation here too.
+               Navigator.push(context, MaterialPageRoute(builder: (context) => MonthlyDetailPage(
+                  summary: s, workOrders: workOrders, customers: customers, payments: receivedPayments, expenses: expenses, usedProducts: usedProducts, materialLog: materialLog,
+                )));
+            },
+          ),
         ),
       ),
-      DataCell(Text(s.totalWorkOrders.toString(), style: const TextStyle(color: Colors.white70))),
-      DataCell(Text(s.sanctionLoad.toStringAsFixed(1), style: const TextStyle(color: Colors.white70))),
-      DataCell(Text("₹${s.totalAmount.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white70))),
-      DataCell(Text("₹${s.amountReceived.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white70))),
-      DataCell(Text("₹${s.outstanding.toStringAsFixed(2)}", style: const TextStyle(color: Colors.redAccent))),
-      DataCell(Text("₹${s.profit.toStringAsFixed(2)}", 
+      DataCell(SelectableText(s.totalWorkOrders.toString(), style: const TextStyle(color: Colors.white70))),
+      DataCell(SelectableText(s.sanctionLoad.toStringAsFixed(1), style: const TextStyle(color: Colors.white70))),
+      DataCell(SelectableText("₹${s.totalAmount.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white70))),
+      DataCell(SelectableText("₹${s.amountReceived.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white70))),
+      DataCell(SelectableText("₹${s.outstanding.toStringAsFixed(2)}", style: const TextStyle(color: Colors.redAccent))),
+      DataCell(SelectableText("₹${s.profit.toStringAsFixed(2)}", 
           style: TextStyle(color: s.profit >= 0 ? Colors.greenAccent : Colors.orangeAccent, fontWeight: FontWeight.bold))),
     ]);
   }
