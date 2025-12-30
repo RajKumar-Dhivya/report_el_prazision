@@ -41,62 +41,114 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
     setState(() => loading = false);
   }
 
-  void processData() {
-    rows.clear();
-    loanCount = 0;
-    cashCount = 0;
+  /// Helper to parse date format "M/D/YYYY HH:mm:ss" or ISO format
+  DateTime? _parseDate(String input) {
+    if (input.isEmpty) return null;
+    try {
+      return DateTime.parse(input);
+    } catch (_) {
+      try {
+        // Handle M/D/YYYY format
+        List<String> parts = input.split(' ');
+        List<String> dateParts = parts[0].split('/');
+        int month = int.parse(dateParts[0]);
+        int day = int.parse(dateParts[1]);
+        int year = int.parse(dateParts[2]);
 
-    for (var wo in widget.workOrders) {
-      if (wo == null) continue;
-      String recordedDate = wo["Recorded Date"] ?? "";
-      if (recordedDate.isEmpty) continue;
-
-      DateTime dt = DateTime.parse(recordedDate);
-      if ("${_monthName(dt.month)} ${dt.year}" != widget.summary.monthYear) continue;
-
-      String workOrderId = wo["ID"].toString().trim();
-      String paymentMode = (wo["Payment Mode"] ?? "").toString().toLowerCase();
-
-      if (paymentMode.contains("loan")) loanCount++;
-      else if (paymentMode.contains("cash")) cashCount++;
-
-      String customerId = wo["Customer Name"].toString();
-      String customerName = widget.customers.firstWhere(
-        (c) => c["ID"].toString() == customerId,
-        orElse: () => {"Customer Name": "Unknown"},
-      )["Customer Name"];
-
-      double received = widget.payments
-          .where((p) => p["Work Order ID"].toString().trim() == workOrderId)
-          .fold(0.0, (sum, p) => sum + (double.tryParse(p["Received Payment"]?.toString() ?? "0") ?? 0));
-
-      double directExpense = widget.expenses
-          .where((exp) => exp["Work order ID"].toString().trim() == workOrderId)
-          .fold(0.0, (sum, item) => sum + (double.tryParse(item["Amount"].toString()) ?? 0.0));
-
-      double productCost = 0;
-      var woUsed = widget.usedProducts.where((up) => up["Work Order id"].toString().trim() == workOrderId);
-      for (var p in woUsed) {
-        double qty = double.tryParse(p["used quantity"].toString()) ?? 0;
-        double unitPrice = widget.materialLog
-            .where((ml) => ml["ID"].toString().trim() == p["product id"].toString().trim())
-            .fold(0.0, (sum, item) => sum + (double.tryParse(item["Unit Price with GST"].toString()) ?? 0.0));
-        productCost += (qty * unitPrice);
+        if (parts.length > 1) {
+          List<String> timeParts = parts[1].split(':');
+          int hour = int.parse(timeParts[0]);
+          int minute = int.parse(timeParts[1]);
+          int second = int.parse(timeParts[2]);
+          return DateTime(year, month, day, hour, minute, second);
+        }
+        return DateTime(year, month, day);
+      } catch (e) {
+        return null;
       }
-
-      double totalAmount = double.tryParse(wo["Total Amount"].toString()) ?? 0;
-      rows.add({
-        "customer": customerName,
-        "kw": wo["Sanction Load/KW"] ?? "0",
-        "mode": wo["Payment Mode"] ?? "N/A",
-        "amount": totalAmount,
-        "received": received,
-        "outstanding": totalAmount - received,
-        "expense": directExpense + productCost,
-        "profit": totalAmount - (directExpense + productCost),
-      });
     }
   }
+
+  void processData() {
+  rows.clear();
+  loanCount = 0;
+  cashCount = 0;
+
+  // 1. Pre-map Customers for O(1) lookup
+  final Map<String, String> customerMap = {
+    for (var c in widget.customers)
+      c["ID"].toString().trim(): c["Customer Name"].toString()
+  };
+
+  // 2. Pre-sum Payments per Work Order
+  final Map<String, double> paymentTotals = {};
+  for (var p in widget.payments) {
+    String id = p["Work Order ID"].toString().trim();
+    double amt = double.tryParse(p["Received Payment"]?.toString() ?? "0") ?? 0;
+    paymentTotals[id] = (paymentTotals[id] ?? 0) + amt;
+  }
+
+  // 3. Pre-sum Expenses per Work Order
+  final Map<String, double> expenseTotals = {};
+  for (var exp in widget.expenses) {
+    String id = exp["Work order ID"].toString().trim();
+    double amt = double.tryParse(exp["Amount"]?.toString() ?? "0") ?? 0;
+    expenseTotals[id] = (expenseTotals[id] ?? 0) + amt;
+  }
+
+  // 4. Pre-index Material Prices
+  final Map<String, double> materialPrices = {
+    for (var ml in widget.materialLog)
+      ml["ID"].toString().trim(): double.tryParse(ml["Unit Price with GST"]?.toString() ?? "0") ?? 0
+  };
+
+  // 5. Pre-group Used Products
+  final Map<String, List<dynamic>> productsByWO = {};
+  for (var up in widget.usedProducts) {
+    String id = up["Work Order id"].toString().trim();
+    productsByWO.putIfAbsent(id, () => []).add(up);
+  }
+
+  // MAIN LOOP
+  for (var wo in widget.workOrders) {
+    if (wo == null) continue;
+    DateTime? dt = _parseDate(wo["Recorded Date"] ?? "");
+    if (dt == null) continue;
+
+    if ("${_monthName(dt.month)} ${dt.year}" != widget.summary.monthYear) continue;
+
+    String workOrderId = wo["ID"].toString().trim();
+    String paymentMode = (wo["Payment Mode"] ?? "").toString().toLowerCase();
+
+    if (paymentMode.contains("loan")) loanCount++;
+    else if (paymentMode.contains("cash")) cashCount++;
+
+    // Fast Lookups
+    String customerName = customerMap[wo["Customer Name"].toString().trim()] ?? "Unknown";
+    double received = paymentTotals[workOrderId] ?? 0.0;
+    double directExpense = expenseTotals[workOrderId] ?? 0.0;
+
+    double productCost = 0;
+    var woUsed = productsByWO[workOrderId] ?? [];
+    for (var p in woUsed) {
+      double qty = double.tryParse(p["used quantity"].toString()) ?? 0;
+      double unitPrice = materialPrices[p["product id"].toString().trim()] ?? 0.0;
+      productCost += (qty * unitPrice);
+    }
+
+    double totalAmount = double.tryParse(wo["Total Amount"].toString()) ?? 0;
+    rows.add({
+      "customer": customerName,
+      "kw": wo["Sanction Load/KW"] ?? "0",
+      "mode": wo["Payment Mode"] ?? "N/A",
+      "amount": totalAmount,
+      "received": received,
+      "outstanding": totalAmount - received,
+      "expense": directExpense + productCost,
+      "profit": totalAmount - (directExpense + productCost),
+    });
+  }
+}
 
   String _monthName(int m) => ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m];
 
@@ -117,16 +169,13 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
         ),
         body: loading
             ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
-            : SingleChildScrollView( // Main scroll for the whole page
+            : SingleChildScrollView(
                 child: Column(
                   children: [
                     _buildHeaderStats(screenWidth),
                     _buildRatioSection(),
                     const SizedBox(height: 16),
-                    
-                    // Fixed height container for the table to prevent overflow
-                    // On mobile, it takes 500px height; on laptop, it takes more
-                    Container(
+                    SizedBox(
                       height: screenHeight > 800 ? 600 : 450, 
                       child: _buildScrollableTableContainer(screenWidth),
                     ),
@@ -263,7 +312,7 @@ class _MonthlyDetailPageState extends State<MonthlyDetailPage> {
                 width: screenWidth > 1132 ? (screenWidth - 32) : 1100,
                 child: Column(
                   children: [
-                    _buildTableHeader(), // Sticky Header
+                    _buildTableHeader(),
                     Expanded(
                       child: Scrollbar(
                         controller: _verticalTableController,

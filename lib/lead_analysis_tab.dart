@@ -15,30 +15,42 @@ class LeadAnalysisTab extends StatefulWidget {
   State<LeadAnalysisTab> createState() => _LeadAnalysisTabState();
 }
 
-class _LeadAnalysisTabState extends State<LeadAnalysisTab> {
+ class _LeadAnalysisTabState extends State<LeadAnalysisTab> {
+  // These track what the user is picking in the calendar
   DateTime fromDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime toDate = DateTime.now();
+
+  // NEW: These track what is actually shown on the screen after pressing "Apply"
+  late DateTime appliedFromDate;
+  late DateTime appliedToDate;
+
   List<dynamic> filteredLeads = [];
 
   final ScrollController _horizontalController1 = ScrollController();
-  final ScrollController _horizontalController2 = ScrollController();
   final ScrollController _horizontalController3 = ScrollController();
   final ScrollController _verticalTableController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    // Initialize applied dates with the default values
+    appliedFromDate = fromDate;
+    appliedToDate = toDate;
     _filterData();
   }
 
   void _filterData() {
     setState(() {
+      // Update the "Applied" labels only when this button is clicked
+      appliedFromDate = fromDate;
+      appliedToDate = toDate;
+
       filteredLeads = widget.leads.where((lead) {
         if (lead == null || lead["Date"] == null || lead["Date"].toString().isEmpty) return false;
         try {
           DateTime leadDate = _parseSheetDate(lead["Date"].toString());
-          DateTime start = DateTime(fromDate.year, fromDate.month, fromDate.day);
-          DateTime end = DateTime(toDate.year, toDate.month, toDate.day).add(const Duration(days: 1));
+          DateTime start = DateTime(appliedFromDate.year, appliedFromDate.month, appliedFromDate.day);
+          DateTime end = DateTime(appliedToDate.year, appliedToDate.month, appliedToDate.day).add(const Duration(days: 1));
           return leadDate.isAfter(start.subtract(const Duration(seconds: 1))) && leadDate.isBefore(end);
         } catch (e) {
           return false;
@@ -99,7 +111,7 @@ class _LeadAnalysisTabState extends State<LeadAnalysisTab> {
           _buildAttractiveFilterBar(),
           const SizedBox(height: 15),
           Text(
-            "Showing results from ${DateFormat('dd MMM yyyy').format(fromDate)} to ${DateFormat('dd MMM yyyy').format(toDate)}",
+            "Showing results from ${DateFormat('dd MMM yyyy').format(appliedFromDate)} to ${DateFormat('dd MMM yyyy').format(appliedToDate)}",
             style: TextStyle(color: Colors.cyanAccent.withOpacity(0.7), fontSize: 12),
           ),
           const SizedBox(height: 30),

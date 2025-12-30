@@ -3,6 +3,8 @@ import 'API CALL/google_sheets_api.dart';
 import 'workorder_summary.dart';
 import 'monthly_detail_page.dart';
 import 'lead_analysis_tab.dart';
+import 'package:flutter/cupertino.dart';
+
 
 class SummaryPage extends StatefulWidget {
   const SummaryPage({super.key});
@@ -36,36 +38,112 @@ class _SummaryPageState extends State<SummaryPage>
     loadAllData();
   }
 
+  /// Helper to parse date format "M/D/YYYY HH:mm:ss" or ISO format
+  DateTime? _parseDate(String input) {
+    if (input.isEmpty) return null;
+    try {
+      // Try standard ISO parse first
+      return DateTime.parse(input);
+    } catch (_) {
+      try {
+        // Parse "12/9/2025 16:26:41"
+        List<String> parts = input.split(' ');
+        List<String> dateParts = parts[0].split('/');
+        int month = int.parse(dateParts[0]);
+        int day = int.parse(dateParts[1]);
+        int year = int.parse(dateParts[2]);
+
+        if (parts.length > 1) {
+          List<String> timeParts = parts[1].split(':');
+          int hour = int.parse(timeParts[0]);
+          int minute = int.parse(timeParts[1]);
+          int second = int.parse(timeParts[2]);
+          return DateTime(year, month, day, hour, minute, second);
+        }
+        return DateTime(year, month, day);
+      } catch (e) {
+        debugPrint("Failed to parse date: $input");
+        return null;
+      }
+    }
+  }
+
   Future<void> loadAllData() async {
     try {
-      workOrders = await GoogleSheetsApi.getSheet("Work Orders");
-      receivedPayments = await GoogleSheetsApi.getSheet("Received Payments");
-      customers = await GoogleSheetsApi.getSheet("Customer");
-      leads = await GoogleSheetsApi.getSheet("Lead");
-      employees = await GoogleSheetsApi.getSheet("EmployeeProfile");
-      expenses = await GoogleSheetsApi.getSheet("Expense");
-      usedProducts = await GoogleSheetsApi.getSheet("Used Products");
-      materialLog = await GoogleSheetsApi.getSheet(
+      final sheetNames = [
+        "Work Orders",
+        "Received Payments",
+        "Customer",
+        "Lead",
+        "EmployeeProfile",
+        "Expense",
+        "Used Products",
         "Material Consumption & Purchase Log",
-      );
+      ].join(",");
 
-      processWorkOrders(workOrders);
-      calculateReceivedPayments();
+      final results = await GoogleSheetsApi.getSheets(sheetNames);
+
+      if (mounted) {
+        setState(() {
+          workOrders = results.length > 0 ? results[0] : [];
+          receivedPayments = results.length > 1 ? results[1] : [];
+          customers = results.length > 2 ? results[2] : [];
+          leads = results.length > 3 ? results[3] : [];
+          employees = results.length > 4 ? results[4] : [];
+          expenses = results.length > 5 ? results[5] : [];
+          usedProducts = results.length > 6 ? results[6] : [];
+          materialLog = results.length > 7 ? results[7] : [];
+        });
+
+        processWorkOrders(workOrders);
+        calculateReceivedPayments();
+      }
     } catch (e) {
-      debugPrint("Error fetching data: $e");
+      debugPrint("Global Error: $e");
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
-    if (mounted) setState(() => loading = false);
   }
 
   void processWorkOrders(List rows) {
     summaryMap.clear();
+
+    // 1. Pre-group Expenses: O(N)
+    final Map<String, double> expenseTotals = {};
+    for (var exp in expenses) {
+      String id = exp["Work order ID"].toString().trim();
+      double amt = double.tryParse(exp["Amount"].toString()) ?? 0.0;
+      expenseTotals[id] = (expenseTotals[id] ?? 0) + amt;
+    }
+
+    // 2. Pre-index Material Log (Unit Prices): O(N)
+    final Map<String, double> materialPrices = {};
+    for (var ml in materialLog) {
+      String prodID = ml["ID"].toString().trim();
+      double price =
+          double.tryParse(ml["Unit Price with GST"].toString()) ?? 0.0;
+      materialPrices[prodID] = price;
+    }
+
+    // 3. Pre-group Used Products by Work Order: O(N)
+    final Map<String, List<Map<String, dynamic>>> productsByWO = {};
+    for (var up in usedProducts) {
+      String woID = up["Work Order id"].toString().trim();
+      productsByWO
+          .putIfAbsent(woID, () => [])
+          .add(Map<String, dynamic>.from(up));
+    }
+
+    // MAIN LOOP: Now runs at O(1) for all lookups
     for (var row in rows) {
       if (row == null ||
           row.values.every((v) => v == null || v.toString().trim().isEmpty))
         continue;
-      String recordedDate = row["Recorded Date"] ?? "";
+
+      String recordedDateStr = row["Recorded Date"] ?? "";
       String woID = row["ID"].toString().trim();
-      if (recordedDate.isEmpty) continue;
+      DateTime? dt = _parseDate(recordedDateStr);
+      if (dt == null) continue;
 
       double sanctionLoad =
           double.tryParse(
@@ -77,38 +155,20 @@ class _SummaryPageState extends State<SummaryPage>
           0;
       double totalAmount = double.tryParse(row["Total Amount"].toString()) ?? 0;
 
-      double totalExpenses = expenses
-          .where((exp) => exp["Work order ID"].toString().trim() == woID)
-          .fold(
-            0.0,
-            (sum, item) =>
-                sum + (double.tryParse(item["Amount"].toString()) ?? 0.0),
-          );
+      // Fast Lookup: Expenses
+      double totalExpenses = expenseTotals[woID] ?? 0.0;
 
+      // Fast Lookup: Products
       double totalProductCost = 0;
-      var woUsedProducts = usedProducts.where(
-        (up) => up["Work Order id"].toString().trim() == woID,
-      );
+      var woUsedProducts = productsByWO[woID] ?? [];
       for (var product in woUsedProducts) {
         double qty = double.tryParse(product["used quantity"].toString()) ?? 0;
-        double unitPrice = materialLog
-            .where(
-              (ml) =>
-                  ml["ID"].toString().trim() ==
-                  product["product id"].toString().trim(),
-            )
-            .fold(
-              0.0,
-              (sum, item) =>
-                  sum +
-                  (double.tryParse(item["Unit Price with GST"].toString()) ??
-                      0.0),
-            );
+        String prodID = product["product id"].toString().trim();
+        double unitPrice = materialPrices[prodID] ?? 0.0; // O(1) lookup!
         totalProductCost += (qty * unitPrice);
       }
 
       double woProfit = totalAmount - (totalExpenses + totalProductCost);
-      DateTime dt = DateTime.parse(recordedDate);
       String monthYear = "${_monthName(dt.month)} ${dt.year}";
 
       summaryMap.putIfAbsent(monthYear, () => WorkOrderSummary(monthYear));
@@ -123,7 +183,7 @@ class _SummaryPageState extends State<SummaryPage>
 
   void calculateReceivedPayments() {
     for (var payment in receivedPayments) {
-      String woID = payment["Work Order ID"].toString();
+      String woID = payment["Work Order ID"].toString().trim();
       double amount =
           double.tryParse(payment["Received Payment"].toString()) ?? 0;
       for (var s in summaryMap.values) {
@@ -158,25 +218,44 @@ class _SummaryPageState extends State<SummaryPage>
   Widget build(BuildContext context) {
     return SelectionArea(
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F1113), // Deep black-grey
-        body: Column(
+        backgroundColor: const Color(0xFF0F1113),
+        body: Stack(
+          // Wrap with Stack
           children: [
-            _buildHeader(),
-            Expanded(
-              child: loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.cyanAccent,
-                      ),
-                    )
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildWorkOrderContent(),
-                        LeadAnalysisTab(leads: leads, employees: employees),
-                      ],
-                    ),
+            Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.cyanAccent,
+                            strokeWidth: 2, // Thinner lines often feel faster/more modern
+                            
+                          ),
+                        )
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildWorkOrderContent(),
+                            LeadAnalysisTab(leads: leads, employees: employees),
+                          ],
+                        ),
+                ),
+              ],
             ),
+            if (isNavigating) // Show loading overlay if navigating
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                  child: const Center(
+                    child: CupertinoActivityIndicator(
+                      color: Colors.cyanAccent,
+                      radius: 15,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -184,71 +263,74 @@ class _SummaryPageState extends State<SummaryPage>
   }
 
   Widget _buildHeader() {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-    color: const Color(0xFF1A1C1E),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            // Check if we are on a small screen (e.g., width less than 600)
-            bool isMobile = constraints.maxWidth < 600;
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 1. Flexible Title
-                Expanded(
-                  child: SelectableText(
-                    "Reports & Analytics",
-                    style: TextStyle(
-                      color: Colors.white,
-                      // Smaller font for mobile, larger for desktop
-                      fontSize: isMobile ? 18 : 26,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+      color: const Color(0xFF1A1C1E),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              bool isMobile = constraints.maxWidth < 600;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: SelectableText(
+                      "Reports & Analytics",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isMobile ? 18 : 26,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
-                ),
-                
-                const SizedBox(width: 10), // Small gap
-
-                // 2. Company Logo
-                Image.asset(
-                  'assets/elp-logo (Small).jpeg',
-                  height: isMobile ? 30 : 40, // Slightly smaller logo on mobile
-                  errorBuilder: (ctx, err, stack) => Icon(
-                    Icons.business,
-                    color: Colors.cyanAccent,
-                    size: isMobile ? 30 : 40,
+                  const SizedBox(width: 10),
+                  Image.asset(
+                    'assets/elp-logo (Small).jpeg',
+                    height: isMobile ? 30 : 40,
+                    errorBuilder: (ctx, err, stack) => Icon(
+                      Icons.business,
+                      color: Colors.cyanAccent,
+                      size: isMobile ? 30 : 40,
+                    ),
                   ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.label,
+            indicatorColor: Colors.cyanAccent,
+            labelColor: Colors.cyanAccent,
+            unselectedLabelColor: Colors.grey.shade500,
+            tabAlignment: TabAlignment.start,
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(
+                child: Text(
+                  "WORK ORDER SUMMARY",
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorWeight: 3,
-          indicatorSize: TabBarIndicatorSize.label,
-          indicatorColor: Colors.cyanAccent,
-          labelColor: Colors.cyanAccent,
-          unselectedLabelColor: Colors.grey.shade500,
-          tabAlignment: TabAlignment.start,
-          dividerColor: Colors.transparent,
-          tabs: const [
-            Tab(child: Text("WORK ORDER SUMMARY", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))),
-            Tab(child: Text("LEAD ANALYSIS", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+              ),
+              Tab(
+                child: Text(
+                  "LEAD ANALYSIS",
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildWorkOrderContent() {
     return LayoutBuilder(
@@ -348,7 +430,7 @@ class _SummaryPageState extends State<SummaryPage>
           const SizedBox(height: 12),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 24,
               fontWeight: FontWeight.w900,
@@ -379,7 +461,6 @@ class _SummaryPageState extends State<SummaryPage>
       "Outstanding",
       "Profit",
     ];
-
     double tableContentWidth = maxWidth < 1100 ? 1100 : (maxWidth - 48);
 
     return Container(
@@ -418,22 +499,15 @@ class _SummaryPageState extends State<SummaryPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // --- HEADER ROW WITH WHITE UNDERLINE ---
                     Container(
-                      // The 'color' property MUST be inside decoration, not here.
                       padding: const EdgeInsets.symmetric(
                         vertical: 20,
                         horizontal: 24,
                       ),
                       decoration: const BoxDecoration(
-                        color: Color(
-                          0xFF25282C,
-                        ), // Background color moved inside here
+                        color: Color(0xFF25282C),
                         border: Border(
-                          bottom: BorderSide(
-                            color: Colors.white,
-                            width: 1.5,
-                          ), // The white line
+                          bottom: BorderSide(color: Colors.white, width: 1.5),
                         ),
                       ),
                       child: Row(
@@ -454,7 +528,6 @@ class _SummaryPageState extends State<SummaryPage>
                             .toList(),
                       ),
                     ),
-                    // --- BODY ---
                     Flexible(
                       child: Scrollbar(
                         controller: _tableVerticalController,
@@ -575,8 +648,16 @@ class _SummaryPageState extends State<SummaryPage>
     );
   }
 
-  void _navigateToDetail(WorkOrderSummary s) {
-    Navigator.push(
+  bool isNavigating = false;
+  void _navigateToDetail(WorkOrderSummary s) async {
+    setState(() => isNavigating = true);
+
+    // Small delay to allow the UI to render the loading spinner
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (!mounted) return;
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MonthlyDetailPage(
@@ -590,5 +671,8 @@ class _SummaryPageState extends State<SummaryPage>
         ),
       ),
     );
+    if (mounted) {
+      setState(() => isNavigating = false);
+    }
   }
 }
